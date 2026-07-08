@@ -23,7 +23,7 @@ SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_SEARCH_URL = "https://api.spotify.com/v1/search"
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 GITHUB_API_URL = "https://api.github.com"
-TIMEZONE = ZoneInfo("America/New_York")
+TIMEZONE = ZoneInfo("America/Denver")
 SPOTIFY_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError)
 OPENAI_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError)
 DEFAULT_EVENT_INTEREST_KEYWORDS = "war, crime, natural disasters, battles"
@@ -65,8 +65,8 @@ def main() -> None:
     force_send = os.getenv("FORCE_SEND", "").lower() in {"1", "true", "yes"}
     now = dt.datetime.now(TIMEZONE)
 
-    if not force_send and now.hour != 15:
-        print(f"Skipping: current America/New_York time is {now:%H:%M}, not 15:00.")
+    if not force_send and now.hour != 23:
+        print(f"Skipping: current America/Denver time is {now:%H:%M}, not 23:00.")
         return
 
     month, day = target_month_day(now)

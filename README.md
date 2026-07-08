@@ -1,13 +1,13 @@
 # Daily History Notifier
 
-This is a tiny GitHub Actions app that runs every day at 3pm America/New_York, finds an interesting historical event from Wikimedia's "On this day" feed, looks up related Spotify podcast shows, and sends a notification.
+This is a tiny GitHub Actions app that runs every day at 11pm America/Denver, finds an interesting historical event from Wikimedia's "On this day" feed, looks up related Spotify podcast shows, and sends a notification.
 
 By default, the notification is a GitHub issue in this repository. If you watch the repo, GitHub will email you when the issue is created. You can also set `NOTIFY_WEBHOOK_URL` to send the same message to Slack, Discord, or another webhook endpoint.
 
 ## How it works
 
 - `.github/workflows/daily-history.yml` runs on a schedule and via manual dispatch.
-- `history_digest.py` checks that the current New York time is 3pm before sending.
+- `history_digest.py` checks that the current Mountain time is 11pm before sending.
 - Wikimedia provides the historical events and Wikipedia links.
 - Spotify is searched with the Client Credentials flow.
 - The notification is sent as a GitHub issue unless `NOTIFY_WEBHOOK_URL` is configured.
@@ -43,7 +43,7 @@ To send notifications to Discord, open your Discord server and go to **Server Se
 
 Use **Actions -> Daily history notification -> Run workflow**.
 
-- `force=true` sends immediately even if it is not 3pm in New York.
+- `force=true` sends immediately even if it is not 11pm in Mountain time.
 - `date=MM-DD` lets you test a specific date, such as `07-20`.
 
 ## Local testing
