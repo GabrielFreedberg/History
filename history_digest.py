@@ -258,13 +258,23 @@ def choose_wikipedia_page(event: dict) -> dict:
     return max(pages, key=lambda page: score_page_match(page, event_terms, specific_text))
 
 
-def score_page_match(page: dict, event_terms: set[str], event_text: str) -> tuple[int, int, int, int, int]:
+def score_page_match(page: dict, event_terms: set[str], event_text: str) -> tuple[int, int, int, int, int, int]:
     title = page.get("normalizedtitle") or page.get("title", "")
     normalized_title = str(title).lower().replace("_", " ")
     normalized_event = event_text.lower()
     title_terms = important_terms(normalized_title)
     overlap_score = len(title_terms & event_terms)
     exact_title_score = int(contains_phrase(normalized_event, normalized_title))
+    subject_action_score = int(
+        bool(
+            re.search(
+                rf"\b(?:king|queen|emperor|president|general|admiral|prime minister\s+)?"
+                rf"{re.escape(normalized_title)}\s+"
+                rf"(?:dies|died|is killed|was killed|assassinated|is assassinated|was assassinated|captured|is captured|was captured)\b",
+                normalized_event,
+            )
+        )
+    )
     strong_context_pattern = rf"\b(?:battle|fortress|siege)\s+of\s+(?:the\s+)?{re.escape(normalized_title)}\b"
     strong_context_score = int(bool(re.search(strong_context_pattern, normalized_event)))
     generic_context_pattern = rf"\b(?:at|in|into|near|to|toward|towards)\s+{re.escape(normalized_title)}\b"
@@ -272,6 +282,7 @@ def score_page_match(page: dict, event_terms: set[str], event_text: str) -> tupl
     possessive_penalty = int(bool(re.search(rf"\b{re.escape(normalized_title)}'s\b", normalized_event)))
     specificity_score = min(len(title_terms), 8)
     return (
+        subject_action_score,
         strong_context_score,
         exact_title_score,
         overlap_score,
