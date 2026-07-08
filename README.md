@@ -27,6 +27,8 @@ By default, the notification is a GitHub issue in this repository. If you watch 
 
 `GITHUB_TOKEN` is provided automatically by GitHub Actions.
 
+To send notifications to Discord, open your Discord server and go to **Server Settings -> Integrations -> Webhooks**. Create a webhook for the channel you want, copy its URL, and save it as the `NOTIFY_WEBHOOK_URL` repository secret.
+
 ## Running manually
 
 Use **Actions -> Daily history notification -> Run workflow**.
@@ -45,4 +47,3 @@ Without GitHub or webhook credentials, the script prints the notification to the
 ## Notes
 
 Spotify does not expose podcast ratings through its public API, so this searches for relevant shows and returns Spotify's search ranking. For stricter "highly rated" podcast ranking, you would need another data source that provides podcast reviews or ratings.
-

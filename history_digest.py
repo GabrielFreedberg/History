@@ -329,10 +329,16 @@ def create_github_issue(title: str, body: str) -> bool:
 
 
 def post_webhook(webhook_url: str, title: str, body: str) -> None:
+    message = f"{title}\n\n{body}"
+    if "discord.com/api/webhooks/" in webhook_url or "discordapp.com/api/webhooks/" in webhook_url:
+        payload = {"content": truncate_text(message, limit=2000)}
+    else:
+        payload = {"text": message}
+
     request_json(
         urllib.request.Request(
             webhook_url,
-            data=json.dumps({"text": f"{title}\n\n{body}"}).encode(),
+            data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         ),
@@ -355,6 +361,12 @@ def request_json(request: urllib.request.Request, expect_json: bool = True) -> d
 
 def clean_text(value: str) -> str:
     return " ".join(value.replace("<br/>", " ").replace("<br>", " ").split())
+
+
+def truncate_text(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 3].rstrip() + "..."
 
 
 if __name__ == "__main__":
