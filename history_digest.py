@@ -65,8 +65,8 @@ def main() -> None:
     force_send = os.getenv("FORCE_SEND", "").lower() in {"1", "true", "yes"}
     now = dt.datetime.now(TIMEZONE)
 
-    if not force_send and now.hour != 15:
-        print(f"Skipping: current America/New_York time is {now:%H:%M}, not 15:00.")
+    if not force_send and now.hour != 0:
+        print(f"Skipping: current America/New_York time is {now:%H:%M}, not 00:55.")
         return
 
     month, day = target_month_day(now)
