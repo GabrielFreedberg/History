@@ -14,7 +14,7 @@ on:
   schedule:
     # GitHub Actions cron is UTC. Running at both 05:00 and 06:00 UTC lets
     # the script send at 11pm America/Denver across daylight saving changes.
-    - cron: "11 5,6 * * *"
+    - cron: "15 23,24 * * *"
 
 permissions:
   contents: read
