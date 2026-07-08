@@ -40,16 +40,6 @@ TITLE_STOP_WORDS = {
     "the",
     "to",
 }
-PODCAST_STOP_WORDS = TITLE_STOP_WORDS | {
-    "battle",
-    "history",
-    "podcast",
-    "troops",
-    "war",
-    "world",
-}
-
-
 @dataclass(frozen=True)
 class HistoricalEvent:
     year: int
@@ -324,7 +314,7 @@ def podcast_relevance_terms(value: str) -> set[str]:
     return {
         term
         for term in re.findall(r"[a-z0-9]+", normalize_search_text(value))
-        if len(term) > 2 and term not in PODCAST_STOP_WORDS
+        if len(term) >= 4 and term not in TITLE_STOP_WORDS
     }
 
 
