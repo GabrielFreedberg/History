@@ -23,18 +23,18 @@ By default, the notification is a GitHub issue in this repository. If you watch 
 | --- | --- | --- |
 | `SPOTIFY_CLIENT_ID` | Recommended | Spotify app client ID. |
 | `SPOTIFY_CLIENT_SECRET` | Recommended | Spotify app client secret. |
-| `OPENAI_API_KEY` | Optional | OpenAI API key. If set, OpenAI selects the most interesting event, chooses the best Wikipedia page, and ranks Spotify podcast matches. |
+| `OPENAI_API_KEY` | Optional | OpenAI API key. If set, OpenAI selects the most interesting event and chooses the best Wikipedia page. |
 | `NOTIFY_WEBHOOK_URL` | Optional | Slack, Discord, or generic webhook URL. If omitted, the app creates a GitHub issue. |
 
 `GITHUB_TOKEN` is provided automatically by GitHub Actions.
 
-`OPENAI_API_KEY` requires OpenAI API billing/quota. A ChatGPT subscription is separate from API usage. If the API key is missing quota, the script falls back to local event and podcast selection.
+`OPENAI_API_KEY` requires OpenAI API billing/quota. A ChatGPT subscription is separate from API usage. If the API key is missing quota, the script falls back to local event and Wikipedia page selection.
 
 You can also set optional repository variables:
 
-- `OPENAI_MODEL` chooses the OpenAI model used for event selection, Wikipedia page selection, and podcast ranking. If omitted, the workflow uses `gpt-4o-mini`.
+- `OPENAI_MODEL` chooses the OpenAI model used for event selection and Wikipedia page selection. If omitted, the workflow uses `gpt-4o-mini`.
 - `EVENT_INTEREST_KEYWORDS` steers event selection toward preferred topics. If omitted, the workflow uses `war, crime, natural disasters, battles`.
-- `DEBUG_MATCHING=true` prints Spotify candidates and OpenAI-selected/rejected podcast matches in the workflow log.
+- `DEBUG_MATCHING=true` prints the Spotify query and returned podcast candidates in the workflow log.
 
 To send notifications to Discord, open your Discord server and go to **Server Settings -> Integrations -> Webhooks**. Create a webhook for the channel you want, copy its URL, and save it as the `NOTIFY_WEBHOOK_URL` repository secret.
 

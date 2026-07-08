@@ -435,109 +435,11 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
     ]
     debug_matching(f"Spotify query: {query}")
     debug_podcast_list("Spotify returned candidates", podcasts)
-    if os.getenv("OPENAI_API_KEY", "").strip():
-        try:
-            return openai_rank_podcasts(event, podcasts), True
-        except OPENAI_ERRORS as exc:
-            print(f"OpenAI podcast ranking failed: {exc}")
-            print("Falling back to local Spotify relevance scoring.")
-
-    return locally_rank_podcasts(event, podcasts), True
-
-
-def locally_rank_podcasts(event: HistoricalEvent, podcasts: list[Podcast]) -> list[Podcast]:
-    ranked_podcasts = sorted(
-        ((score_podcast_match(podcast, event), podcast) for podcast in podcasts),
-        key=lambda item: item[0],
-        reverse=True,
-    )
-    return [podcast for score, podcast in ranked_podcasts if score >= 2][:5]
+    return podcasts[:3], True
 
 
 def spotify_search_query(event: HistoricalEvent) -> str:
     return textwrap.shorten(f"{event.title} history podcast", width=120, placeholder="")
-
-
-def openai_rank_podcasts(event: HistoricalEvent, podcasts: list[Podcast]) -> list[Podcast]:
-    if not podcasts:
-        return []
-
-    payload = request_json(
-        urllib.request.Request(
-            OPENAI_RESPONSES_URL,
-            data=json.dumps(openai_ranking_request(event, podcasts)).encode(),
-            headers=openai_headers(),
-            method="POST",
-        )
-    )
-    selected_urls = parse_openai_selected_urls(payload)
-    podcasts_by_url = {podcast.url: podcast for podcast in podcasts}
-    selected = [podcasts_by_url[url] for url in selected_urls if url in podcasts_by_url][:5]
-    debug_podcast_list("OpenAI selected Spotify candidates", selected)
-    rejected = [podcast for podcast in podcasts if podcast.url not in {selected_podcast.url for selected_podcast in selected}]
-    debug_podcast_list("OpenAI rejected Spotify candidates", rejected)
-    return selected
-
-
-def openai_ranking_request(event: HistoricalEvent, podcasts: list[Podcast]) -> dict:
-    candidates = [
-        {
-            "name": podcast.name,
-            "publisher": podcast.publisher,
-            "url": podcast.url,
-            "description": textwrap.shorten(podcast.description, width=500, placeholder="..."),
-        }
-        for podcast in podcasts[:20]
-    ]
-    return {
-        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        "instructions": (
-            "You rank Spotify podcast shows for a daily history notification. "
-            "Choose only shows that are clearly relevant to the specific historical event. "
-            "Prefer exact event-title matches, then strongly related era/topic matches. "
-            "Reject shows about a different conflict, person, place, era, or broad generic history."
-        ),
-        "input": json.dumps(
-            {
-                "event": {
-                    "year": event.year,
-                    "title": event.title,
-                    "text": event.text,
-                    "wikipedia_url": event.wikipedia_url,
-                },
-                "spotify_candidates": candidates,
-            }
-        ),
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": "podcast_matches",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "urls": {
-                            "type": "array",
-                            "description": "Spotify URLs for the best matching shows, best first.",
-                            "items": {"type": "string"},
-                            "maxItems": 5,
-                        }
-                    },
-                    "required": ["urls"],
-                },
-            }
-        },
-    }
-
-
-def parse_openai_selected_urls(payload: dict) -> list[str]:
-    text = payload.get("output_text") or response_output_text(payload)
-    parsed = json.loads(text)
-    urls = parsed.get("urls", [])
-    if not isinstance(urls, list):
-        return []
-    return [url for url in urls if isinstance(url, str)]
 
 
 def response_output_text(payload: dict) -> str:
@@ -600,70 +502,8 @@ def podcast_from_show(show: dict) -> Podcast:
     )
 
 
-def podcast_matches_event(podcast: Podcast, event: HistoricalEvent) -> bool:
-    return score_podcast_match(podcast, event) >= 2
-
-
-def score_podcast_match(podcast: Podcast, event: HistoricalEvent) -> int:
-    event_context = f"{event.title} {event.text}"
-    podcast_name = normalize_search_text(podcast.name)
-    podcast_context = normalize_search_text(f"{podcast.name} {podcast.description}")
-    score = 0
-
-    title_phrase = normalize_search_text(event.title)
-    if len(podcast_relevance_terms(title_phrase)) >= 1 and contains_phrase(podcast_name, title_phrase):
-        score += 5
-    elif len(podcast_relevance_terms(title_phrase)) >= 1 and contains_phrase(podcast_context, title_phrase):
-        score += 3
-
-    for phrase in event_relevance_phrases(event_context):
-        if contains_phrase(podcast_context, phrase):
-            score += 2
-
-    event_terms = podcast_relevance_terms(event_context)
-    podcast_terms = podcast_relevance_terms(podcast_context)
-    score += len(event_terms & podcast_terms)
-    return score
-
-
-def event_relevance_phrases(value: str) -> set[str]:
-    normalized = normalize_search_text(value)
-    phrases = set(re.findall(r"\bworld war (?:i|ii)\b", normalized))
-    for chunk in re.split(r"[:.;,]", normalized):
-        for match in re.findall(r"\bbattle of (?:the )?[a-z0-9]+(?: [a-z0-9]+){0,3}", chunk):
-            phrase = re.split(r"\bworld war\b", match, maxsplit=1)[0].strip()
-            if len(podcast_relevance_terms(phrase)) >= 1:
-                phrases.add(phrase)
-    return {phrase.strip() for phrase in phrases}
-
-
 def contains_phrase(value: str, phrase: str) -> bool:
     return bool(re.search(rf"\b{re.escape(phrase)}\b", value))
-
-
-def podcast_relevance_terms(value: str) -> set[str]:
-    return {
-        term
-        for term in re.findall(r"[a-z0-9]+", normalize_search_text(value))
-        if len(term) >= 4 and term not in TITLE_STOP_WORDS
-    }
-
-
-def normalize_search_text(value: str) -> str:
-    normalized = value.lower()
-    replacements = {
-        "wwi": "world war i",
-        "ww1": "world war i",
-        "world war 1": "world war i",
-        "first world war": "world war i",
-        "wwii": "world war ii",
-        "ww2": "world war ii",
-        "world war 2": "world war ii",
-        "second world war": "world war ii",
-    }
-    for old, new in replacements.items():
-        normalized = re.sub(rf"\b{re.escape(old)}\b", new, normalized)
-    return normalized
 
 
 def render_notification(
