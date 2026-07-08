@@ -413,7 +413,7 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
             "q": query,
             "type": "show",
             "market": "US",
-            "limit": "20",
+            "limit": "10",
         }
     )
     try:

@@ -28,6 +28,8 @@ By default, the notification is a GitHub issue in this repository. If you watch 
 
 `GITHUB_TOKEN` is provided automatically by GitHub Actions.
 
+`OPENAI_API_KEY` requires OpenAI API billing/quota. A ChatGPT subscription is separate from API usage. If the API key is missing quota, the script falls back to local event and podcast selection.
+
 You can also set optional repository variables:
 
 - `OPENAI_MODEL` chooses the OpenAI model used for event selection, Wikipedia page selection, and podcast ranking. If omitted, the workflow uses `gpt-4o-mini`.
