@@ -12,8 +12,8 @@ on:
         required: false
         default: ""
   schedule:
-    # GitHub Actions cron is UTC. Running at both 19:00 and 20:00 UTC lets
-    # the script send at 3pm America/New_York across daylight saving changes.
+    # GitHub Actions cron is UTC. Running at both 05:37 and 06:37 UTC lets
+    # the script send at 11:37pm America/Denver across daylight saving changes.
     - cron: "37 5,6 * * *"
 
 permissions:
@@ -23,6 +23,7 @@ permissions:
 jobs:
   notify:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -31,6 +32,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Debug trigger
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "force=${{ github.event.inputs.force || 'false' }}"
+          echo "date=${{ github.event.inputs.date || '' }}"
+          echo "repository=${{ github.repository }}"
+          echo "ref=${{ github.ref }}"
+          echo "UTC time:"
+          date -u
 
       - name: Send history notification
         env:
@@ -45,5 +56,5 @@ jobs:
           DEBUG_MATCHING: ${{ vars.DEBUG_MATCHING || 'false' }}
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
           FORCE_SEND: ${{ github.event.inputs.force || 'false' }}
-          HISTORY_DATE: ${{ github.event.inputs.date }}
+          HISTORY_DATE: ${{ github.event.inputs.date || '' }}
         run: python history_digest.py
