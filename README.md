@@ -32,6 +32,7 @@ You can also set optional repository variables:
 
 - `OPENAI_MODEL` chooses the OpenAI model used for event selection, Wikipedia page selection, and podcast ranking. If omitted, the workflow uses `gpt-4o-mini`.
 - `EVENT_INTEREST_KEYWORDS` steers event selection toward preferred topics. If omitted, the workflow uses `war, crime, natural disasters, battles`.
+- `DEBUG_MATCHING=true` prints Spotify candidates and OpenAI-selected/rejected podcast matches in the workflow log.
 
 To send notifications to Discord, open your Discord server and go to **Server Settings -> Integrations -> Webhooks**. Create a webhook for the channel you want, copy its URL, and save it as the `NOTIFY_WEBHOOK_URL` repository secret.
 

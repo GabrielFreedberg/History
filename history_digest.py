@@ -433,6 +433,8 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
         for show in shows
         if show.get("external_urls", {}).get("spotify")
     ]
+    debug_matching(f"Spotify query: {query}")
+    debug_podcast_list("Spotify returned candidates", podcasts)
     if os.getenv("OPENAI_API_KEY", "").strip():
         try:
             return openai_rank_podcasts(event, podcasts), True
@@ -470,7 +472,11 @@ def openai_rank_podcasts(event: HistoricalEvent, podcasts: list[Podcast]) -> lis
     )
     selected_urls = parse_openai_selected_urls(payload)
     podcasts_by_url = {podcast.url: podcast for podcast in podcasts}
-    return [podcasts_by_url[url] for url in selected_urls if url in podcasts_by_url][:5]
+    selected = [podcasts_by_url[url] for url in selected_urls if url in podcasts_by_url][:5]
+    debug_podcast_list("OpenAI selected Spotify candidates", selected)
+    rejected = [podcast for podcast in podcasts if podcast.url not in {selected_podcast.url for selected_podcast in selected}]
+    debug_podcast_list("OpenAI rejected Spotify candidates", rejected)
+    return selected
 
 
 def openai_ranking_request(event: HistoricalEvent, podcasts: list[Podcast]) -> dict:
@@ -549,6 +555,23 @@ def openai_headers() -> dict:
         "Content-Type": "application/json",
         "User-Agent": "daily-history-notifier/1.0",
     }
+
+
+def debug_enabled() -> bool:
+    return os.getenv("DEBUG_MATCHING", "").lower() in {"1", "true", "yes"}
+
+
+def debug_matching(message: str) -> None:
+    if debug_enabled():
+        print(f"[debug] {message}")
+
+
+def debug_podcast_list(label: str, podcasts: list[Podcast]) -> None:
+    if not debug_enabled():
+        return
+    print(f"[debug] {label}: {len(podcasts)}")
+    for index, podcast in enumerate(podcasts, start=1):
+        print(f"[debug] {index}. {podcast.name} | {podcast.url}")
 
 
 def spotify_access_token(client_id: str, client_secret: str) -> str:
