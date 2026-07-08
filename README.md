@@ -23,7 +23,7 @@ By default, the notification is a GitHub issue in this repository. If you watch 
 | --- | --- | --- |
 | `SPOTIFY_CLIENT_ID` | Recommended | Spotify app client ID. |
 | `SPOTIFY_CLIENT_SECRET` | Recommended | Spotify app client secret. |
-| `OPENAI_API_KEY` | Optional | OpenAI API key. If set, OpenAI selects the most interesting event and chooses the best Wikipedia page. |
+| `OPENAI_API_KEY` | Optional | OpenAI API key. If set, OpenAI selects the most interesting event and chooses the best Wikipedia page. It can also rank podcast matches if enabled. |
 | `NOTIFY_WEBHOOK_URL` | Optional | Slack, Discord, or generic webhook URL. If omitted, the app creates a GitHub issue. |
 
 `GITHUB_TOKEN` is provided automatically by GitHub Actions.
@@ -32,7 +32,8 @@ By default, the notification is a GitHub issue in this repository. If you watch 
 
 You can also set optional repository variables:
 
-- `OPENAI_MODEL` chooses the OpenAI model used for event selection and Wikipedia page selection. If omitted, the workflow uses `gpt-4o-mini`.
+- `OPENAI_MODEL` chooses the OpenAI model used for event selection, Wikipedia page selection, and optional podcast ranking. If omitted, the workflow uses `gpt-4o-mini`.
+- `USE_OPENAI_PODCAST_RANKING=true` enables OpenAI podcast ranking. If omitted, the workflow uses the first three Spotify results.
 - `EVENT_INTEREST_KEYWORDS` steers event selection toward preferred topics. If omitted, the workflow uses `war, crime, natural disasters, battles`.
 - `DEBUG_MATCHING=true` prints the Spotify query and returned podcast candidates in the workflow log.
 
