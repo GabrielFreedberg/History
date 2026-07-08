@@ -40,6 +40,14 @@ TITLE_STOP_WORDS = {
     "the",
     "to",
 }
+PODCAST_STOP_WORDS = TITLE_STOP_WORDS | {
+    "battle",
+    "history",
+    "podcast",
+    "troops",
+    "war",
+    "world",
+}
 
 
 @dataclass(frozen=True)
@@ -68,10 +76,10 @@ def main() -> None:
 
     month, day = target_month_day(now)
     event = pick_event(fetch_events(month, day), month, day)
-    podcasts = search_spotify_podcasts(event)
+    podcasts, podcast_search_attempted = search_spotify_podcasts(event)
 
     title = f"On this day: {event.title} ({event.year})"
-    body = render_notification(event, podcasts, month, day)
+    body = render_notification(event, podcasts, month, day, podcast_search_attempted)
 
     webhook_url = os.getenv("NOTIFY_WEBHOOK_URL", "").strip()
     if webhook_url:
@@ -203,17 +211,17 @@ def score_event(event: dict) -> tuple[int, int]:
     return keyword_score + page_score + text_score, int(event.get("year", 0))
 
 
-def search_spotify_podcasts(event: HistoricalEvent) -> list[Podcast]:
+def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool]:
     client_id = os.getenv("SPOTIFY_CLIENT_ID", "").strip()
     client_secret = os.getenv("SPOTIFY_CLIENT_SECRET", "").strip()
     if not client_id or not client_secret:
-        return []
+        return [], False
 
     try:
         token = spotify_access_token(client_id, client_secret)
     except SPOTIFY_ERRORS as exc:
         print(f"Skipping Spotify podcast search: {exc}")
-        return []
+        return [], True
 
     query = textwrap.shorten(
         f"{event.title} {event.text} history podcast",
@@ -225,7 +233,7 @@ def search_spotify_podcasts(event: HistoricalEvent) -> list[Podcast]:
             "q": query,
             "type": "show",
             "market": "US",
-            "limit": "5",
+            "limit": "10",
         }
     )
     try:
@@ -237,10 +245,15 @@ def search_spotify_podcasts(event: HistoricalEvent) -> list[Podcast]:
         )
     except SPOTIFY_ERRORS as exc:
         print(f"Skipping Spotify podcast search: {exc}")
-        return []
+        return [], True
 
     shows = payload.get("shows", {}).get("items", [])
-    return [podcast_from_show(show) for show in shows if show.get("external_urls", {}).get("spotify")][:5]
+    podcasts = [
+        podcast_from_show(show)
+        for show in shows
+        if show.get("external_urls", {}).get("spotify")
+    ]
+    return [podcast for podcast in podcasts if podcast_matches_event(podcast, event)][:5], True
 
 
 def spotify_access_token(client_id: str, client_secret: str) -> str:
@@ -269,7 +282,76 @@ def podcast_from_show(show: dict) -> Podcast:
     )
 
 
-def render_notification(event: HistoricalEvent, podcasts: list[Podcast], month: int, day: int) -> str:
+def podcast_matches_event(podcast: Podcast, event: HistoricalEvent) -> bool:
+    return score_podcast_match(podcast, event) >= 2
+
+
+def score_podcast_match(podcast: Podcast, event: HistoricalEvent) -> int:
+    event_context = f"{event.title} {event.text}"
+    podcast_context = normalize_search_text(f"{podcast.name} {podcast.description}")
+    score = 0
+
+    title_phrase = normalize_search_text(event.title)
+    if len(podcast_relevance_terms(title_phrase)) >= 1 and contains_phrase(podcast_context, title_phrase):
+        score += 3
+
+    for phrase in event_relevance_phrases(event_context):
+        if contains_phrase(podcast_context, phrase):
+            score += 2
+
+    event_terms = podcast_relevance_terms(event_context)
+    podcast_terms = podcast_relevance_terms(podcast_context)
+    score += len(event_terms & podcast_terms)
+    return score
+
+
+def event_relevance_phrases(value: str) -> set[str]:
+    normalized = normalize_search_text(value)
+    phrases = set(re.findall(r"\bworld war (?:i|ii)\b", normalized))
+    for chunk in re.split(r"[:.;,]", normalized):
+        for match in re.findall(r"\bbattle of (?:the )?[a-z0-9]+(?: [a-z0-9]+){0,3}", chunk):
+            phrase = re.split(r"\bworld war\b", match, maxsplit=1)[0].strip()
+            if len(podcast_relevance_terms(phrase)) >= 1:
+                phrases.add(phrase)
+    return {phrase.strip() for phrase in phrases}
+
+
+def contains_phrase(value: str, phrase: str) -> bool:
+    return bool(re.search(rf"\b{re.escape(phrase)}\b", value))
+
+
+def podcast_relevance_terms(value: str) -> set[str]:
+    return {
+        term
+        for term in re.findall(r"[a-z0-9]+", normalize_search_text(value))
+        if len(term) > 2 and term not in PODCAST_STOP_WORDS
+    }
+
+
+def normalize_search_text(value: str) -> str:
+    normalized = value.lower()
+    replacements = {
+        "wwi": "world war i",
+        "ww1": "world war i",
+        "world war 1": "world war i",
+        "first world war": "world war i",
+        "wwii": "world war ii",
+        "ww2": "world war ii",
+        "world war 2": "world war ii",
+        "second world war": "world war ii",
+    }
+    for old, new in replacements.items():
+        normalized = re.sub(rf"\b{re.escape(old)}\b", new, normalized)
+    return normalized
+
+
+def render_notification(
+    event: HistoricalEvent,
+    podcasts: list[Podcast],
+    month: int,
+    day: int,
+    podcast_search_attempted: bool,
+) -> str:
     blurb = event.text
     if len(blurb) > 360:
         blurb = textwrap.shorten(blurb, width=360, placeholder="...")
@@ -289,10 +371,15 @@ def render_notification(event: HistoricalEvent, podcasts: list[Podcast], month: 
             detail = f" - {description}" if description else ""
             lines.append(f"- [{podcast.name}]({podcast.url}) by {podcast.publisher}{detail}")
     else:
+        spotify_message = (
+            "No relevant Spotify podcast matches were found."
+            if podcast_search_attempted
+            else "Spotify podcast matches were skipped because Spotify credentials are not configured."
+        )
         lines.extend(
             [
                 "",
-                "Spotify podcast matches were skipped because Spotify credentials are not configured.",
+                spotify_message,
             ]
         )
 
