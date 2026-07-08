@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import textwrap
 import urllib.error
 import urllib.parse
@@ -23,6 +24,22 @@ SPOTIFY_SEARCH_URL = "https://api.spotify.com/v1/search"
 GITHUB_API_URL = "https://api.github.com"
 TIMEZONE = ZoneInfo("America/New_York")
 SPOTIFY_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError)
+TITLE_STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "by",
+    "for",
+    "in",
+    "of",
+    "on",
+    "or",
+    "part",
+    "the",
+    "to",
+}
 
 
 @dataclass(frozen=True)
@@ -100,13 +117,15 @@ def fetch_events(month: int, day: int) -> list[dict]:
 
 def pick_event(events: list[dict], month: int, day: int) -> HistoricalEvent:
     scored_events = sorted(
-        (score_event(event), event) for event in events if event.get("pages")
+        ((score_event(event), event) for event in events if event.get("pages")),
+        key=lambda item: item[0],
     )
     best_events = [event for _, event in scored_events[-8:]]
     seed = int(hashlib.sha256(f"{month:02d}-{day:02d}".encode()).hexdigest(), 16)
     selected = random.Random(seed).choice(best_events)
 
-    page = selected["pages"][0]
+    event_text = str(selected.get("text", "")).strip()
+    page = choose_wikipedia_page(selected)
     urls = page.get("content_urls", {})
     desktop_url = urls.get("desktop", {}).get("page")
     wikipedia_url = desktop_url or f"https://en.wikipedia.org/wiki/{urllib.parse.quote(page.get('title', ''))}"
@@ -114,10 +133,39 @@ def pick_event(events: list[dict], month: int, day: int) -> HistoricalEvent:
 
     return HistoricalEvent(
         year=int(selected.get("year", 0)),
-        text=str(selected.get("text", "")).strip(),
+        text=event_text,
         title=title,
         wikipedia_url=wikipedia_url,
     )
+
+
+def choose_wikipedia_page(event: dict) -> dict:
+    pages = event.get("pages", [])
+    if not pages:
+        return {}
+
+    event_text = str(event.get("text", ""))
+    specific_text = event_text.split(":", 1)[-1]
+    event_terms = important_terms(specific_text)
+    return max(pages, key=lambda page: score_page_match(page, event_terms, specific_text))
+
+
+def score_page_match(page: dict, event_terms: set[str], event_text: str) -> tuple[int, int, int]:
+    title = page.get("normalizedtitle") or page.get("title", "")
+    normalized_title = str(title).lower().replace("_", " ")
+    title_terms = important_terms(normalized_title)
+    overlap_score = len(title_terms & event_terms)
+    exact_title_score = int(normalized_title in event_text.lower())
+    specificity_score = min(len(title_terms), 8)
+    return overlap_score, exact_title_score, specificity_score
+
+
+def important_terms(value: str) -> set[str]:
+    return {
+        term
+        for term in re.findall(r"[a-z0-9]+", value.lower())
+        if len(term) > 2 and term not in TITLE_STOP_WORDS
+    }
 
 
 def score_event(event: dict) -> tuple[int, int]:
