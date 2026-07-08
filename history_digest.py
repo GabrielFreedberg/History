@@ -252,29 +252,95 @@ def choose_wikipedia_page(event: dict) -> dict:
     if not pages:
         return {}
 
+    if os.getenv("OPENAI_API_KEY", "").strip():
+        try:
+            return openai_choose_wikipedia_page(event)
+        except OPENAI_ERRORS as exc:
+            print(f"OpenAI Wikipedia page selection failed: {exc}")
+            print("Falling back to local Wikipedia page scoring.")
+
+    return locally_choose_wikipedia_page(event)
+
+
+def locally_choose_wikipedia_page(event: dict) -> dict:
+    pages = event.get("pages", [])
     event_text = str(event.get("text", ""))
     specific_text = event_text.split(":", 1)[-1]
     event_terms = important_terms(specific_text)
     return max(pages, key=lambda page: score_page_match(page, event_terms, specific_text))
 
 
-def score_page_match(page: dict, event_terms: set[str], event_text: str) -> tuple[int, int, int, int, int, int]:
+def openai_choose_wikipedia_page(event: dict) -> dict:
+    pages = event.get("pages", [])
+    payload = request_json(
+        urllib.request.Request(
+            OPENAI_RESPONSES_URL,
+            data=json.dumps(openai_page_selection_request(event)).encode(),
+            headers=openai_headers(),
+            method="POST",
+        )
+    )
+    selected_index = parse_openai_selected_index(payload)
+    pages_by_index = {index: page for index, page in enumerate(pages)}
+    if selected_index not in pages_by_index:
+        raise RuntimeError(f"OpenAI selected invalid Wikipedia page index: {selected_index}")
+    return pages_by_index[selected_index]
+
+
+def openai_page_selection_request(event: dict) -> dict:
+    candidates = [
+        {
+            "index": index,
+            "title": page.get("normalizedtitle") or str(page.get("title", "")).replace("_", " "),
+            "extract": textwrap.shorten(str(page.get("extract", "")), width=450, placeholder="..."),
+        }
+        for index, page in enumerate(event.get("pages", [])[:10])
+    ]
+    return {
+        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        "instructions": (
+            "Choose the single best Wikipedia page for the specific historical event. "
+            "Prefer the page about the event's main subject, battle, siege, disaster, crime, or concrete incident. "
+            "Avoid broad country, era, or generic biography pages when a more specific candidate explains the event. "
+            "Return only the selected candidate index."
+        ),
+        "input": json.dumps(
+            {
+                "event": {
+                    "year": event.get("year"),
+                    "text": str(event.get("text", "")),
+                },
+                "candidates": candidates,
+            }
+        ),
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "selected_wikipedia_page",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "selected_index": {
+                            "type": "integer",
+                            "description": "The index of the best Wikipedia page candidate.",
+                        }
+                    },
+                    "required": ["selected_index"],
+                },
+            }
+        },
+    }
+
+
+def score_page_match(page: dict, event_terms: set[str], event_text: str) -> tuple[int, int, int, int, int]:
     title = page.get("normalizedtitle") or page.get("title", "")
     normalized_title = str(title).lower().replace("_", " ")
     normalized_event = event_text.lower()
     title_terms = important_terms(normalized_title)
     overlap_score = len(title_terms & event_terms)
     exact_title_score = int(contains_phrase(normalized_event, normalized_title))
-    subject_action_score = int(
-        bool(
-            re.search(
-                rf"\b(?:king|queen|emperor|president|general|admiral|prime minister\s+)?"
-                rf"{re.escape(normalized_title)}\s+"
-                rf"(?:dies|died|is killed|was killed|assassinated|is assassinated|was assassinated|captured|is captured|was captured)\b",
-                normalized_event,
-            )
-        )
-    )
     strong_context_pattern = rf"\b(?:battle|fortress|siege)\s+of\s+(?:the\s+)?{re.escape(normalized_title)}\b"
     strong_context_score = int(bool(re.search(strong_context_pattern, normalized_event)))
     generic_context_pattern = rf"\b(?:at|in|into|near|to|toward|towards)\s+{re.escape(normalized_title)}\b"
@@ -282,7 +348,6 @@ def score_page_match(page: dict, event_terms: set[str], event_text: str) -> tupl
     possessive_penalty = int(bool(re.search(rf"\b{re.escape(normalized_title)}'s\b", normalized_event)))
     specificity_score = min(len(title_terms), 8)
     return (
-        subject_action_score,
         strong_context_score,
         exact_title_score,
         overlap_score,
