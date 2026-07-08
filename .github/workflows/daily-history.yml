@@ -40,6 +40,7 @@ jobs:
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
+          EVENT_INTEREST_KEYWORDS: ${{ vars.EVENT_INTEREST_KEYWORDS || 'war, crime, natural disasters, battles' }}
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
           FORCE_SEND: ${{ github.event.inputs.force || 'false' }}
           HISTORY_DATE: ${{ github.event.inputs.date }}

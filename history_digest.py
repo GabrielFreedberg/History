@@ -26,6 +26,7 @@ GITHUB_API_URL = "https://api.github.com"
 TIMEZONE = ZoneInfo("America/New_York")
 SPOTIFY_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError)
 OPENAI_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError)
+DEFAULT_EVENT_INTEREST_KEYWORDS = "war, crime, natural disasters, battles"
 TITLE_STOP_WORDS = {
     "a",
     "an",
@@ -168,6 +169,7 @@ def openai_pick_event(events: list[dict], month: int, day: int) -> dict:
 
 
 def openai_event_selection_request(events: list[dict], month: int, day: int) -> dict:
+    interest_keywords = event_interest_keywords()
     candidates = [
         {
             "index": index,
@@ -186,11 +188,14 @@ def openai_event_selection_request(events: list[dict], month: int, day: int) -> 
             "You choose one event for a daily history notification. "
             "Pick the single most interesting event for a general audience: specific, vivid, historically important, "
             "and likely to have good podcast or documentary context. Prefer concrete events over broad biographies. "
+            "Give extra weight to events related to the user's interest keywords, but do not choose a weak event only "
+            "because it matches a keyword. "
             "Return only the index of the chosen candidate."
         ),
         "input": json.dumps(
             {
                 "date": f"{month:02d}-{day:02d}",
+                "interest_keywords": interest_keywords,
                 "candidates": candidates,
             }
         ),
@@ -213,6 +218,11 @@ def openai_event_selection_request(events: list[dict], month: int, day: int) -> 
             }
         },
     }
+
+
+def event_interest_keywords() -> list[str]:
+    raw_keywords = os.getenv("EVENT_INTEREST_KEYWORDS", DEFAULT_EVENT_INTEREST_KEYWORDS)
+    return [keyword.strip() for keyword in raw_keywords.split(",") if keyword.strip()]
 
 
 def parse_openai_selected_index(payload: dict) -> int:
