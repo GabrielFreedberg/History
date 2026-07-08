@@ -25,7 +25,7 @@ OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 GITHUB_API_URL = "https://api.github.com"
 TIMEZONE = ZoneInfo("America/New_York")
 SPOTIFY_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError)
-OPENAI_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError)
+OPENAI_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError)
 TITLE_STOP_WORDS = {
     "a",
     "an",
@@ -122,14 +122,106 @@ def fetch_events(month: int, day: int) -> list[dict]:
 
 
 def pick_event(events: list[dict], month: int, day: int) -> HistoricalEvent:
+    candidates = [event for event in events if event.get("pages")]
+    if not candidates:
+        raise RuntimeError(f"No Wikimedia events with pages returned for {month:02d}-{day:02d}.")
+
+    selected = None
+    if os.getenv("OPENAI_API_KEY", "").strip():
+        try:
+            selected = openai_pick_event(candidates, month, day)
+            print(f"OpenAI selected historical event: {selected.get('year')} - {selected.get('text')}")
+        except OPENAI_ERRORS as exc:
+            print(f"OpenAI event selection failed: {exc}")
+            print("Falling back to local historical event selection.")
+
+    if selected is None:
+        selected = locally_pick_event(candidates, month, day)
+
+    return historical_event_from_wikimedia(selected)
+
+
+def locally_pick_event(events: list[dict], month: int, day: int) -> dict:
     scored_events = sorted(
-        ((score_event(event), event) for event in events if event.get("pages")),
+        ((score_event(event), event) for event in events),
         key=lambda item: item[0],
     )
     best_events = [event for _, event in scored_events[-8:]]
     seed = int(hashlib.sha256(f"{month:02d}-{day:02d}".encode()).hexdigest(), 16)
-    selected = random.Random(seed).choice(best_events)
+    return random.Random(seed).choice(best_events)
 
+
+def openai_pick_event(events: list[dict], month: int, day: int) -> dict:
+    payload = request_json(
+        urllib.request.Request(
+            OPENAI_RESPONSES_URL,
+            data=json.dumps(openai_event_selection_request(events, month, day)).encode(),
+            headers=openai_headers(),
+            method="POST",
+        )
+    )
+    selected_index = parse_openai_selected_index(payload)
+    events_by_index = {index: event for index, event in enumerate(events)}
+    if selected_index not in events_by_index:
+        raise RuntimeError(f"OpenAI selected invalid event index: {selected_index}")
+    return events_by_index[selected_index]
+
+
+def openai_event_selection_request(events: list[dict], month: int, day: int) -> dict:
+    candidates = [
+        {
+            "index": index,
+            "year": event.get("year"),
+            "text": str(event.get("text", "")),
+            "page_titles": [
+                page.get("normalizedtitle") or str(page.get("title", "")).replace("_", " ")
+                for page in event.get("pages", [])[:5]
+            ],
+        }
+        for index, event in enumerate(events)
+    ]
+    return {
+        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        "instructions": (
+            "You choose one event for a daily history notification. "
+            "Pick the single most interesting event for a general audience: specific, vivid, historically important, "
+            "and likely to have good podcast or documentary context. Prefer concrete events over broad biographies. "
+            "Return only the index of the chosen candidate."
+        ),
+        "input": json.dumps(
+            {
+                "date": f"{month:02d}-{day:02d}",
+                "candidates": candidates,
+            }
+        ),
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "selected_history_event",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "selected_index": {
+                            "type": "integer",
+                            "description": "The index of the most interesting event candidate.",
+                        }
+                    },
+                    "required": ["selected_index"],
+                },
+            }
+        },
+    }
+
+
+def parse_openai_selected_index(payload: dict) -> int:
+    text = payload.get("output_text") or response_output_text(payload)
+    parsed = json.loads(text)
+    return int(parsed["selected_index"])
+
+
+def historical_event_from_wikimedia(selected: dict) -> HistoricalEvent:
     event_text = str(selected.get("text", "")).strip()
     page = choose_wikipedia_page(selected)
     urls = page.get("content_urls", {})
@@ -278,11 +370,7 @@ def openai_rank_podcasts(event: HistoricalEvent, podcasts: list[Podcast]) -> lis
         urllib.request.Request(
             OPENAI_RESPONSES_URL,
             data=json.dumps(openai_ranking_request(event, podcasts)).encode(),
-            headers={
-                "Authorization": f"Bearer {os.environ['OPENAI_API_KEY'].strip()}",
-                "Content-Type": "application/json",
-                "User-Agent": "daily-history-notifier/1.0",
-            },
+            headers=openai_headers(),
             method="POST",
         )
     )
@@ -359,6 +447,14 @@ def response_output_text(payload: dict) -> str:
             if content.get("type") in {"output_text", "text"}:
                 parts.append(str(content.get("text", "")))
     return "".join(parts)
+
+
+def openai_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {os.environ['OPENAI_API_KEY'].strip()}",
+        "Content-Type": "application/json",
+        "User-Agent": "daily-history-notifier/1.0",
+    }
 
 
 def spotify_access_token(client_id: str, client_secret: str) -> str:
