@@ -38,8 +38,9 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
           FORCE_SEND: ${{ github.event.inputs.force || 'false' }}
           HISTORY_DATE: ${{ github.event.inputs.date }}
         run: python history_digest.py
-

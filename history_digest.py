@@ -21,9 +21,11 @@ from zoneinfo import ZoneInfo
 WIKIMEDIA_ON_THIS_DAY = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events/{month}/{day}"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_SEARCH_URL = "https://api.spotify.com/v1/search"
+OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 GITHUB_API_URL = "https://api.github.com"
 TIMEZONE = ZoneInfo("America/New_York")
 SPOTIFY_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError)
+OPENAI_ERRORS = (RuntimeError, urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError)
 TITLE_STOP_WORDS = {
     "a",
     "an",
@@ -40,6 +42,8 @@ TITLE_STOP_WORDS = {
     "the",
     "to",
 }
+
+
 @dataclass(frozen=True)
 class HistoricalEvent:
     year: int
@@ -239,16 +243,118 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
         for show in shows
         if show.get("external_urls", {}).get("spotify")
     ]
+    if os.getenv("OPENAI_API_KEY", "").strip():
+        try:
+            return openai_rank_podcasts(event, podcasts), True
+        except OPENAI_ERRORS as exc:
+            print(f"OpenAI podcast ranking failed: {exc}")
+            print("Falling back to local Spotify relevance scoring.")
+
+    return locally_rank_podcasts(event, podcasts), True
+
+
+def locally_rank_podcasts(event: HistoricalEvent, podcasts: list[Podcast]) -> list[Podcast]:
     ranked_podcasts = sorted(
         ((score_podcast_match(podcast, event), podcast) for podcast in podcasts),
         key=lambda item: item[0],
         reverse=True,
     )
-    return [podcast for score, podcast in ranked_podcasts if score >= 2][:5], True
+    return [podcast for score, podcast in ranked_podcasts if score >= 2][:5]
 
 
 def spotify_search_query(event: HistoricalEvent) -> str:
     return textwrap.shorten(f"{event.title} history podcast", width=120, placeholder="")
+
+
+def openai_rank_podcasts(event: HistoricalEvent, podcasts: list[Podcast]) -> list[Podcast]:
+    if not podcasts:
+        return []
+
+    payload = request_json(
+        urllib.request.Request(
+            OPENAI_RESPONSES_URL,
+            data=json.dumps(openai_ranking_request(event, podcasts)).encode(),
+            headers={
+                "Authorization": f"Bearer {os.environ['OPENAI_API_KEY'].strip()}",
+                "Content-Type": "application/json",
+                "User-Agent": "daily-history-notifier/1.0",
+            },
+            method="POST",
+        )
+    )
+    selected_urls = parse_openai_selected_urls(payload)
+    podcasts_by_url = {podcast.url: podcast for podcast in podcasts}
+    return [podcasts_by_url[url] for url in selected_urls if url in podcasts_by_url][:5]
+
+
+def openai_ranking_request(event: HistoricalEvent, podcasts: list[Podcast]) -> dict:
+    candidates = [
+        {
+            "name": podcast.name,
+            "publisher": podcast.publisher,
+            "url": podcast.url,
+            "description": textwrap.shorten(podcast.description, width=500, placeholder="..."),
+        }
+        for podcast in podcasts[:20]
+    ]
+    return {
+        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        "instructions": (
+            "You rank Spotify podcast shows for a daily history notification. "
+            "Choose only shows that are clearly relevant to the specific historical event. "
+            "Prefer exact event-title matches, then strongly related era/topic matches. "
+            "Reject shows about a different conflict, person, place, era, or broad generic history."
+        ),
+        "input": json.dumps(
+            {
+                "event": {
+                    "year": event.year,
+                    "title": event.title,
+                    "text": event.text,
+                    "wikipedia_url": event.wikipedia_url,
+                },
+                "spotify_candidates": candidates,
+            }
+        ),
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "podcast_matches",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "urls": {
+                            "type": "array",
+                            "description": "Spotify URLs for the best matching shows, best first.",
+                            "items": {"type": "string"},
+                            "maxItems": 5,
+                        }
+                    },
+                    "required": ["urls"],
+                },
+            }
+        },
+    }
+
+
+def parse_openai_selected_urls(payload: dict) -> list[str]:
+    text = payload.get("output_text") or response_output_text(payload)
+    parsed = json.loads(text)
+    urls = parsed.get("urls", [])
+    if not isinstance(urls, list):
+        return []
+    return [url for url in urls if isinstance(url, str)]
+
+
+def response_output_text(payload: dict) -> str:
+    parts = []
+    for item in payload.get("output", []):
+        for content in item.get("content", []):
+            if content.get("type") in {"output_text", "text"}:
+                parts.append(str(content.get("text", "")))
+    return "".join(parts)
 
 
 def spotify_access_token(client_id: str, client_secret: str) -> str:
