@@ -213,17 +213,13 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
         print(f"Skipping Spotify podcast search: {exc}")
         return [], True
 
-    query = textwrap.shorten(
-        f"{event.title} {event.text} history podcast",
-        width=180,
-        placeholder="",
-    )
+    query = spotify_search_query(event)
     params = urllib.parse.urlencode(
         {
             "q": query,
             "type": "show",
             "market": "US",
-            "limit": "10",
+            "limit": "20",
         }
     )
     try:
@@ -243,7 +239,16 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
         for show in shows
         if show.get("external_urls", {}).get("spotify")
     ]
-    return [podcast for podcast in podcasts if podcast_matches_event(podcast, event)][:5], True
+    ranked_podcasts = sorted(
+        ((score_podcast_match(podcast, event), podcast) for podcast in podcasts),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    return [podcast for score, podcast in ranked_podcasts if score >= 2][:5], True
+
+
+def spotify_search_query(event: HistoricalEvent) -> str:
+    return textwrap.shorten(f"{event.title} history podcast", width=120, placeholder="")
 
 
 def spotify_access_token(client_id: str, client_secret: str) -> str:
@@ -278,11 +283,14 @@ def podcast_matches_event(podcast: Podcast, event: HistoricalEvent) -> bool:
 
 def score_podcast_match(podcast: Podcast, event: HistoricalEvent) -> int:
     event_context = f"{event.title} {event.text}"
+    podcast_name = normalize_search_text(podcast.name)
     podcast_context = normalize_search_text(f"{podcast.name} {podcast.description}")
     score = 0
 
     title_phrase = normalize_search_text(event.title)
-    if len(podcast_relevance_terms(title_phrase)) >= 1 and contains_phrase(podcast_context, title_phrase):
+    if len(podcast_relevance_terms(title_phrase)) >= 1 and contains_phrase(podcast_name, title_phrase):
+        score += 5
+    elif len(podcast_relevance_terms(title_phrase)) >= 1 and contains_phrase(podcast_context, title_phrase):
         score += 3
 
     for phrase in event_relevance_phrases(event_context):
