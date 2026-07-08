@@ -163,7 +163,11 @@ def search_spotify_podcasts(event: HistoricalEvent) -> list[Podcast]:
         print(f"Skipping Spotify podcast search: {exc}")
         return []
 
-    query = f'{event.title} history podcast OR documentary'
+    query = textwrap.shorten(
+        f"{event.title} {event.text} history podcast",
+        width=180,
+        placeholder="",
+    )
     params = urllib.parse.urlencode(
         {
             "q": query,
