@@ -1,0 +1,45 @@
+name: Daily history notification
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Send even if it is not currently 3pm America/New_York"
+        required: false
+        default: "true"
+      date:
+        description: "Optional MM-DD test date, for example 07-20"
+        required: false
+        default: ""
+  schedule:
+    # GitHub Actions cron is UTC. Running at both 19:00 and 20:00 UTC lets
+    # the script send at 3pm America/New_York across daylight saving changes.
+    - cron: "0 19,20 * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Send history notification
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          FORCE_SEND: ${{ github.event.inputs.force || 'false' }}
+          HISTORY_DATE: ${{ github.event.inputs.date }}
+        run: python history_digest.py
+
