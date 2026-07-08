@@ -75,9 +75,13 @@ def main() -> None:
 
     webhook_url = os.getenv("NOTIFY_WEBHOOK_URL", "").strip()
     if webhook_url:
-        post_webhook(webhook_url, title, body)
-        print("Sent webhook notification.")
-        return
+        try:
+            post_webhook(webhook_url, title, body)
+            print("Sent webhook notification.")
+            return
+        except RuntimeError as exc:
+            print(f"Webhook notification failed: {exc}")
+            print("Falling back to GitHub issue notification.")
 
     if create_github_issue(title, body):
         print("Created GitHub issue notification.")
@@ -339,7 +343,10 @@ def post_webhook(webhook_url: str, title: str, body: str) -> None:
         urllib.request.Request(
             webhook_url,
             data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "daily-history-notifier/1.0",
+            },
             method="POST",
         ),
         expect_json=False,
