@@ -3,18 +3,13 @@ name: Daily history notification
 on:
   workflow_dispatch:
     inputs:
-      force:
-        description: "Send even if it is not currently the scheduled local hour"
-        required: false
-        default: "true"
       date:
         description: "Optional MM-DD test date, for example 07-20"
         required: false
         default: ""
   schedule:
     # GitHub Actions cron is UTC. 04:38 UTC is 10:38pm America/Denver
-    # during daylight saving time. Scheduled runs force-send once started,
-    # because GitHub may delay cron jobs beyond the exact scheduled minute.
+    # during daylight saving time.
     - cron: "38 4 * * *"
 
 permissions:
@@ -37,7 +32,6 @@ jobs:
       - name: Debug trigger
         run: |
           echo "event_name=${{ github.event_name }}"
-          echo "force=${{ github.event.inputs.force || 'false' }}"
           echo "date=${{ github.event.inputs.date || '' }}"
           echo "repository=${{ github.repository }}"
           echo "ref=${{ github.ref }}"
@@ -56,6 +50,5 @@ jobs:
           EVENT_INTEREST_KEYWORDS: ${{ vars.EVENT_INTEREST_KEYWORDS || 'war, crime, natural disasters, battles' }}
           DEBUG_MATCHING: ${{ vars.DEBUG_MATCHING || 'false' }}
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
-          FORCE_SEND: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.force || 'false' }}
           HISTORY_DATE: ${{ github.event.inputs.date || '' }}
         run: python history_digest.py

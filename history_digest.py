@@ -62,12 +62,7 @@ class Podcast:
 
 
 def main() -> None:
-    force_send = os.getenv("FORCE_SEND", "").lower() in {"1", "true", "yes"}
     now = dt.datetime.now(TIMEZONE)
-
-    if not force_send and now.hour != 23:
-        print(f"Skipping: current America/Denver time is {now:%H:%M}, not 23:00.")
-        return
 
     month, day = target_month_day(now)
     event = pick_event(fetch_events(month, day), month, day)

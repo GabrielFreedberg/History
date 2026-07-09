@@ -43,13 +43,12 @@ To send notifications to Discord, open your Discord server and go to **Server Se
 
 Use **Actions -> Daily history notification -> Run workflow**.
 
-- `force=true` sends immediately even if it is not 11pm in Mountain time.
 - `date=MM-DD` lets you test a specific date, such as `07-20`.
 
 ## Local testing
 
 ```bash
-FORCE_SEND=true HISTORY_DATE=07-20 python history_digest.py
+HISTORY_DATE=07-20 python history_digest.py
 ```
 
 Without GitHub or webhook credentials, the script prints the notification to the terminal.
