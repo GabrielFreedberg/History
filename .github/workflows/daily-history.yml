@@ -12,10 +12,10 @@ on:
         required: false
         default: ""
   schedule:
-    # GitHub Actions cron is UTC. 05:37 UTC is 11:37pm America/Denver
+    # GitHub Actions cron is UTC. 04:38 UTC is 10:38pm America/Denver
     # during daylight saving time. Scheduled runs force-send once started,
     # because GitHub may delay cron jobs beyond the exact scheduled minute.
-    - cron: "37 5 * * *"
+    - cron: "38 4 * * *"
 
 permissions:
   contents: read
