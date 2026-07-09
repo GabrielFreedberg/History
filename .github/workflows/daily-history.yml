@@ -8,9 +8,9 @@ on:
         required: false
         default: ""
   schedule:
-    # GitHub Actions cron is UTC. 05:57 UTC is 11:57pm America/Denver
+    # GitHub Actions cron is UTC. 07:57 UTC is 1:57am America/Denver
     # during daylight saving time.
-    - cron: "57 5 * * *"
+    - cron: "57 7 * * *"
 
 permissions:
   contents: read
