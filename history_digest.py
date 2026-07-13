@@ -406,7 +406,7 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
     params = urllib.parse.urlencode(
         {
             "q": query,
-            "type": "show",
+            "type": "episode",
             "market": "US",
             "limit": "10",
         }
