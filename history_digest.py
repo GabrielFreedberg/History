@@ -56,7 +56,6 @@ class HistoricalEvent:
 @dataclass(frozen=True)
 class Podcast:
     name: str
-    publisher: str
     url: str
     description: str
 
@@ -473,7 +472,6 @@ def openai_ranking_request(event: HistoricalEvent, podcasts: list[Podcast]) -> d
     candidates = [
         {
             "name": podcast.name,
-            "publisher": podcast.publisher,
             "url": podcast.url,
             "description": textwrap.shorten(podcast.description, width=500, placeholder="..."),
         }
@@ -617,7 +615,7 @@ def render_notification(
         for podcast in podcasts:
             description = textwrap.shorten(podcast.description, width=180, placeholder="...")
             detail = f" - {description}" if description else ""
-            lines.append(f"- [{podcast.name}]({podcast.url}) by {podcast.publisher}{detail}")
+            lines.append(f"- [{podcast.name}]({podcast.url}){detail}")
     else:
         spotify_message = (
             "No relevant Spotify podcast matches were found."
