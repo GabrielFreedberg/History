@@ -441,7 +441,7 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
 
 
 def spotify_search_query(event: HistoricalEvent) -> str:
-    return textwrap.shorten(f"{event.title} history podcast", width=120, placeholder="")
+    return textwrap.shorten(event.title, width=120, placeholder="")
 
 
 def use_openai_podcast_ranking() -> bool:
