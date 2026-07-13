@@ -68,7 +68,7 @@ def main() -> None:
     event = pick_event(fetch_events(month, day), month, day)
     podcasts, podcast_search_attempted = search_spotify_podcasts(event)
 
-    title = f"On this day: {event.title} ({event.year})"
+    title = f"On this day, monkey: {event.title} ({event.year})"
     body = render_notification(event, podcasts, month, day, podcast_search_attempted)
 
     webhook_url = os.getenv("NOTIFY_WEBHOOK_URL", "").strip()

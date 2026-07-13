@@ -10,7 +10,7 @@ on:
   schedule:
     # GitHub Actions cron is UTC. 16:00 UTC is 10:00am America/Denver
     # during daylight saving time.
-    - cron: "0 16 * * *"
+    - cron: "17 16 * * *"
 
 permissions:
   contents: read
