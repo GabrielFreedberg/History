@@ -582,10 +582,8 @@ def spotify_access_token(client_id: str, client_secret: str) -> str:
 
 
 def podcast_from_episode(episode: dict) -> Podcast:
-    publisher = episode.get("author") or episode.get("publisher") or "Unknown author"
     return Podcast(
         name=episode.get("name", "Untitled episode"),
-        publisher=publisher,
         url=episode.get("external_urls", {}).get("spotify", ""),
         description=clean_text(episode.get("description", "")),
     )
