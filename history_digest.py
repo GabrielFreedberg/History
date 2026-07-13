@@ -422,14 +422,14 @@ def search_spotify_podcasts(event: HistoricalEvent) -> tuple[list[Podcast], bool
         print(f"Skipping Spotify podcast search: {exc}")
         return [], True
 
-    shows = payload.get("shows", {}).get("items", [])
+    episodes = payload.get("episodes", {}).get("items", [])
     podcasts = [
-        podcast_from_show(show)
-        for show in shows
-        if show.get("external_urls", {}).get("spotify")
+        podcast_from_episode(episode)
+        for episode in episodes
+        if episode and episode.get("external_urls", {}).get("spotify")
     ]
     debug_matching(f"Spotify query: {query}")
-    debug_podcast_list("Spotify returned candidates", podcasts)
+    debug_podcast_list("Spotify returned episode candidates", podcasts)
     if use_openai_podcast_ranking() and os.getenv("OPENAI_API_KEY", "").strip():
         try:
             return openai_rank_podcasts(event, podcasts), True
@@ -482,10 +482,10 @@ def openai_ranking_request(event: HistoricalEvent, podcasts: list[Podcast]) -> d
     return {
         "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         "instructions": (
-            "You rank Spotify podcast shows for a daily history notification. "
-            "Choose only shows that are clearly relevant to the specific historical event. "
+            "You rank Spotify podcast episodes for a daily history notification. "
+            "Choose only episodes that are clearly relevant to the specific historical event. "
             "Prefer exact event-title matches, then strongly related era/topic matches. "
-            "Reject shows about a different conflict, person, place, era, or broad generic history."
+            "Reject episodes about a different conflict, person, place, era, or broad generic history."
         ),
         "input": json.dumps(
             {
@@ -509,7 +509,7 @@ def openai_ranking_request(event: HistoricalEvent, podcasts: list[Podcast]) -> d
                     "properties": {
                         "urls": {
                             "type": "array",
-                            "description": "Spotify URLs for the best matching shows, best first.",
+                            "description": "Spotify URLs for the best matching episodes, best first.",
                             "items": {"type": "string"},
                             "maxItems": 5,
                         }
@@ -581,12 +581,14 @@ def spotify_access_token(client_id: str, client_secret: str) -> str:
     return payload["access_token"]
 
 
-def podcast_from_show(show: dict) -> Podcast:
+def podcast_from_episode(episode: dict) -> Podcast:
+    show = episode.get("show") or {}
+    publisher = show.get("name") or show.get("publisher") or "Unknown show"
     return Podcast(
-        name=show.get("name", "Untitled show"),
-        publisher=show.get("publisher", "Unknown publisher"),
-        url=show.get("external_urls", {}).get("spotify", ""),
-        description=clean_text(show.get("description", "")),
+        name=episode.get("name", "Untitled episode"),
+        publisher=publisher,
+        url=episode.get("external_urls", {}).get("spotify", ""),
+        description=clean_text(episode.get("description", "")),
     )
 
 

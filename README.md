@@ -1,6 +1,6 @@
 # Daily History Notifier
 
-This is a tiny GitHub Actions app that runs every day at 11pm America/Denver, finds an interesting historical event from Wikimedia's "On this day" feed, looks up related Spotify podcast shows, and sends a notification.
+This is a tiny GitHub Actions app that runs every day at 11pm America/Denver, finds an interesting historical event from Wikimedia's "On this day" feed, looks up related Spotify podcast episodes, and sends a notification.
 
 By default, the notification is a GitHub issue in this repository. If you watch the repo, GitHub will email you when the issue is created. You can also set `NOTIFY_WEBHOOK_URL` to send the same message to Slack, Discord, or another webhook endpoint.
 
@@ -55,4 +55,4 @@ Without GitHub or webhook credentials, the script prints the notification to the
 
 ## Notes
 
-Spotify does not expose podcast ratings through its public API, so this searches for relevant shows and returns Spotify's search ranking. For stricter "highly rated" podcast ranking, you would need another data source that provides podcast reviews or ratings.
+Spotify does not expose podcast ratings through its public API, so this searches for relevant episodes and returns Spotify's search ranking. For stricter "highly rated" podcast ranking, you would need another data source that provides podcast reviews or ratings.
